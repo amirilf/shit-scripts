@@ -2,7 +2,7 @@ import random
 from os import system
 
 # GLOBAL
-LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+LETTERS = "iHpqrdeOMNVWyoAbRghZzuSTcGDBkEaCjfvwYJPQUlmnIxLKXstF"
 
 
 def convertBase(number: int, firstBase: int, secondBase: int) -> int:
@@ -115,6 +115,18 @@ def randomLetter() -> str:
     return random.choice(LETTERS)
 
 
+def sameRemainderLetters(remainder: int, size: int) -> list[str]:
+    """
+    Returns all letters with same index remainder to size
+
+    e.g. if remainder is 1 and size is 5
+        ->  indexes => (1,6,11,16,21,26,31,...,51)
+        -> and all the letters these indexes will be returned from LETTERS
+    """
+
+    return LETTERS[remainder::size]
+
+
 def doIt() -> bool:
 
     "just a random true or false"
@@ -126,9 +138,9 @@ def doIt() -> bool:
 
 def keyGenerator() -> list:
     """
-    This function creates a key for the message
+    - Generate a key for the message
 
-    key pattern => [
+    - key pattern:
         - 1) range of seprators
         - 2) main seprator letter
         - 3) number of bases which we use in convertBase
@@ -136,41 +148,30 @@ def keyGenerator() -> list:
         - 5) 3 numbers which we use for operations (+ and * and -)
 
         -> and there are lots of useless chars in between
-    ]
 
-    this key will be converted into parts with specified sizes and added to the beginning and end of the final message
+    This key will be converted into parts with specified sizes and added to the beginning and end of the final message
     parts are defined in `firstPartOfKey` and `secondPartOfKey`
     """
 
+    # random char
     key = randomLetter()
 
-    # the range of accepted letters around seprator letter (now they are all seprators)
-    letterRange = random.randint(1, 9)
-    key += str(letterRange)
+    # define acceptable letters to be seprators in final message
+    divisorSize = random.randint(6, 9)
+    sepratorRemainder = random.randint(0, divisorSize - 1)
+    key += str(sepratorRemainder + (divisorSize * random.randint(11, 99)))
 
-    # if it's (3,6,9) => 3 | (2,4,8) => 2 | (1,5,7) => 1
-    # just a trick to make number between 1 to 9 and not between 1 to 3
-    if letterRange % 3 == 0:
-        letterRange = 3
-    elif letterRange % 2 == 0:
-        letterRange = 2
-    else:
-        letterRange = 1
+    # add the letter with index of divisorSize to decode it
+    key += LETTERS[divisorSize]
 
-    # add the main seprator letter
-    # main seprator is the key letter which will seprate letters in complex result
-    # and we can detect and seprate letters in last result by this letter and its neighbors (which are in range)
-    mainSepratorLetterIndex = random.randint(letterRange, 51 - letterRange)
-    key += str(mainSepratorLetterIndex)
-
-    # just a random letter in between and also it will be used to find the right ascii code of main letter
+    # random char
     key += randomLetter()
 
     # number of bases we use in converBase to make a magic number instead of a simple number
     bases = random.randint(5, 7)
     key += str(bases)
 
-    # to check that there are no matching bases
+    # to check that there are no same bases
     baseList = []
 
     for i in range(bases):
@@ -191,13 +192,13 @@ def keyGenerator() -> list:
 
     # these are values which we use to make numbers more strange
     # pattern for these 7 digits => [3 digit (+) | 1 digit (*) | 3 digit (-)]
-    values = []
+    operationValues = []
 
-    values.append(random.randint(101, 299))
-    values.append(random.randint(3, 9))
-    values.append(random.randint(300, 499))
+    operationValues.append(random.randint(101, 299))
+    operationValues.append(random.randint(3, 9))
+    operationValues.append(random.randint(300, 499))
 
-    for i in values:
+    for i in operationValues:
         key += str(i)
 
         # just a random letter to make it wierd
@@ -206,17 +207,16 @@ def keyGenerator() -> list:
 
     keyLength = len(key)
     half = keyLength // 2
-    firstPartOfKey = random.randint(half - 4, half + 4)
+    firstPartOfKey = random.randint(half - 5, half + 5)
     secondPartOfKey = keyLength - firstPartOfKey
 
     return [
         key,
-        firstPartOfKey,
-        secondPartOfKey,
         baseList,
-        mainSepratorLetterIndex,
-        letterRange,
-        values,
+        operationValues,
+        divisorSize,
+        sepratorRemainder,
+        [firstPartOfKey, secondPartOfKey],
     ]
 
 
@@ -226,9 +226,17 @@ def createMessage(text: str) -> str:
     get the key and then create the rest of it
     """
 
-    # [key, firstPartOfKey, secondPartOfKey, baseList, mainSepratorLetter, letterRange, values]
     keyList = keyGenerator()
 
+    # define variables
+    key = keyList[0]
+    baseList = keyList[1]
+    operationValues = keyList[2]
+    divisorSize = keyList[3]
+    sepratorRemainder = keyList[4]
+    keyParts = keyList[5]
+    seprators = sameRemainderLetters(sepratorRemainder, divisorSize)
+    body = ""
     result = ""
 
     for char in text:
@@ -237,24 +245,51 @@ def createMessage(text: str) -> str:
         charNumber = ord(char)
 
         # convertBase job
-        charNumber = multipleBaseConvertor(charNumber, keyList[3])
+        charNumber = multipleBaseConvertor(charNumber, baseList)
 
         # math job
         charNumber = doMathematicalOperations(
             charNumber,
-            [[keyList[6][0], "+"], [keyList[6][1], "*"], [keyList[6][2], "-"]],
+            list(zip(operationValues, ["+", "*", "-"])),
         )
 
-        # create rendom seprator char (which is in range)
-        seprator = LETTERS[
-            random.randint(keyList[4] - keyList[5], keyList[4] + keyList[5])
-        ]
+        body += str(charNumber) + random.choice(seprators)
 
-        # add the final result
-        print(seprator)
-        result += str(charNumber) + seprator
+    firstPartKey = key[: keyParts[0]]
+    secondPartKey = key[keyParts[0] :]
 
+    """
+    In the last step, we have to insert the first and last size of the key length.
+    First, we specify a random base for each, and then we change the rest number from the specified base to base 10, and finally
+    We get the first and last length that we have to cut to collect the key parts and make the key.
+    
+    trickBase => the random base
+    and we can find the number bcs it's surronded by the trickBase and a random letter
+    
+    keyPart[0] and [1] are length of key parts that we finally wanna insert them in key with the explained way
+    """
+
+    # beginning
+    trickBase = random.randint(6, 9)
+    result = str(trickBase)
+    result += str(convertBase(keyParts[0], 10, trickBase) * trickBase)
+    result += randomLetter()
+
+    # main
+    result += firstPartKey
+    result += body
+    result += secondPartKey
+
+    # end
+    result += randomLetter()
+    trickBase = random.randint(6, 9)
+    result += str(convertBase(keyParts[1], 10, trickBase) * trickBase)
+    result += str(trickBase)
+
+    print(firstPartKey)
+    print(secondPartKey)
     print(keyList)
+    print(body)
     print(result)
 
 
@@ -263,4 +298,4 @@ def readMessage():
 
 
 system("cls || clear")
-createMessage("b")
+createMessage("abcde")
